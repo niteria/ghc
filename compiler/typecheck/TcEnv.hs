@@ -493,27 +493,27 @@ tc_extend_local_env top_lvl extra_env thing_inside
 
 tcExtendLocalTypeEnv :: TcLclEnv -> [(Name, TcTyThing)] -> TcM TcLclEnv
 tcExtendLocalTypeEnv lcl_env@(TcLclEnv { tcl_env = lcl_type_env }) tc_ty_things
-  | isEmptyVarSet extra_tvs
+  | isEmptyDVarSet extra_tvs
   = return (lcl_env { tcl_env = extendNameEnvList lcl_type_env tc_ty_things })
   | otherwise
   = do { global_tvs <- readMutVar (tcl_tyvars lcl_env)
-       ; new_g_var  <- newMutVar (global_tvs `unionVarSet` extra_tvs)
+       ; new_g_var  <- newMutVar (global_tvs `unionDVarSet` extra_tvs)
        ; return (lcl_env { tcl_tyvars = new_g_var
                          , tcl_env = extendNameEnvList lcl_type_env tc_ty_things } ) }
   where
-    extra_tvs = foldr get_tvs emptyVarSet tc_ty_things
+    extra_tvs = foldr get_tvs emptyDVarSet tc_ty_things
 
     get_tvs (_, ATcId { tct_id = id, tct_closed = closed }) tvs
       = case closed of
-          TopLevel    -> ASSERT2( isEmptyVarSet id_tvs, ppr id $$ ppr (idType id) )
+          TopLevel    -> ASSERT2( isEmptyDVarSet id_tvs, ppr id $$ ppr (idType id) )
                          tvs
-          NotTopLevel -> tvs `unionVarSet` id_tvs
-        where id_tvs = tyCoVarsOfType (idType id)
+          NotTopLevel -> tvs `unionDVarSet` id_tvs
+        where id_tvs = tyCoVarsOfTypeDSet (idType id)
 
     get_tvs (_, ATyVar _ tv) tvs          -- See Note [Global TyVars]
-      = tvs `unionVarSet` tyCoVarsOfType (tyVarKind tv) `extendVarSet` tv
+      = tvs `unionDVarSet` tyCoVarsOfTypeDSet (tyVarKind tv) `extendDVarSet` tv
 
-    get_tvs (_, ATcTyCon tc) tvs = tvs `unionVarSet` tyCoVarsOfType (tyConKind tc)
+    get_tvs (_, ATcTyCon tc) tvs = tvs `unionDVarSet` tyCoVarsOfTypeDSet (tyConKind tc)
 
     get_tvs (_, AGlobal {})       tvs = tvs
     get_tvs (_, APromotionErr {}) tvs = tvs

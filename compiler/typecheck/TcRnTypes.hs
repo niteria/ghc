@@ -84,6 +84,7 @@ module TcRnTypes(
         andWC, unionsWC, mkSimpleWC, mkImplicWC,
         addInsols, addSimples, addImplics,
         tyCoVarsOfWC, dropDerivedWC, dropDerivedSimples, dropDerivedInsols,
+        tyCoVarsOfWCDSet,
         isDroppableDerivedLoc, insolubleImplic,
         arisesFromGivens,
 
@@ -702,7 +703,7 @@ data TcLclEnv           -- Changes as we move inside an expression
         tcl_tidy :: TidyEnv,      -- Used for tidying types; contains all
                                   -- in-scope type variables (but not term variables)
 
-        tcl_tyvars :: TcRef TcTyVarSet, -- The "global tyvars"
+        tcl_tyvars :: TcRef TcDTyVarSet, -- The "global tyvars"
                         -- Namely, the in-scope TyVars bound in tcl_env,
                         -- plus the tyvars mentioned in the types of Ids bound
                         -- in tcl_lenv.
@@ -1582,21 +1583,29 @@ tyCoVarsOfCtsAcc :: Cts -> FV
 tyCoVarsOfCtsAcc = foldrBag (unionFV . tyCoVarsOfCtAcc) noVars
 
 tyCoVarsOfWC :: WantedConstraints -> TyCoVarSet
--- Only called on *zonked* things, hence no need to worry about flatten-skolems
-tyCoVarsOfWC (WC { wc_simple = simple, wc_impl = implic, wc_insol = insol })
-  = tyCoVarsOfCts simple `unionVarSet`
-    tyCoVarsOfBag tyCoVarsOfImplic implic `unionVarSet`
-    tyCoVarsOfCts insol
+tyCoVarsOfWC = runFVSet . tyCoVarsOfWCAcc
 
-tyCoVarsOfImplic :: Implication -> TyCoVarSet
+tyCoVarsOfWCDSet :: WantedConstraints -> DTyCoVarSet
+tyCoVarsOfWCDSet = runFVDSet . tyCoVarsOfWCAcc
+
+tyCoVarsOfWCAcc :: WantedConstraints -> FV
 -- Only called on *zonked* things, hence no need to worry about flatten-skolems
-tyCoVarsOfImplic (Implic { ic_skols = skols
+tyCoVarsOfWCAcc (WC { wc_simple = simple, wc_impl = implic, wc_insol = insol })
+  = tyCoVarsOfCtsAcc simple `unionFV`
+    tyCoVarsOfBagAcc tyCoVarsOfImplicAcc implic `unionFV`
+    tyCoVarsOfCtsAcc insol
+
+tyCoVarsOfImplicAcc :: Implication -> FV
+-- Only called on *zonked* things, hence no need to worry about flatten-skolems
+tyCoVarsOfImplicAcc (Implic { ic_skols = skols
                          , ic_given = givens, ic_wanted = wanted })
-  = (tyCoVarsOfWC wanted `unionVarSet` tyCoVarsOfTypes (map evVarPred givens))
-    `delVarSetList` skols
+  = FV.delFVs
+      (mkVarSet skols)
+      (tyCoVarsOfWCAcc wanted `unionFV`
+        tyCoVarsOfTypesAcc (map evVarPred givens))
 
-tyCoVarsOfBag :: (a -> TyCoVarSet) -> Bag a -> TyCoVarSet
-tyCoVarsOfBag tvs_of = foldrBag (unionVarSet . tvs_of) emptyVarSet
+tyCoVarsOfBagAcc :: (a -> FV) -> Bag a -> FV
+tyCoVarsOfBagAcc tvs_of = foldrBag (unionFV . tvs_of) noVars
 
 --------------------------
 dropDerivedSimples :: Cts -> Cts

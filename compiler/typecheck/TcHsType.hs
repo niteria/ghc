@@ -1498,7 +1498,7 @@ kindGeneralize :: TcType -> TcM [KindVar]
 kindGeneralize ty
   = do { gbl_tvs <- tcGetGlobalTyCoVars -- Already zonked
        ; kvs <- zonkTcTypeAndFV ty
-       ; quantifyTyVars gbl_tvs (Pair kvs emptyVarSet) }
+       ; quantifyTyVars gbl_tvs (Pair kvs emptyDVarSet) }
 
 {-
 Note [Kind generalisation]

@@ -283,6 +283,10 @@ alterUDFM f (UDFM m i) k =
 mapUDFM :: (elt1 -> elt2) -> UniqDFM elt1 -> UniqDFM elt2
 mapUDFM f (UDFM m i) = UDFM (M.map (fmap f) m) i
 
+instance Monoid (UniqDFM a) where
+  mempty = emptyUDFM
+  mappend = plusUDFM
+
 -- This should not be used in commited code, provided for convenience to
 -- make ad-hoc conversions when developing
 alwaysUnsafeUfmToUdfm :: UniqFM elt -> UniqDFM elt

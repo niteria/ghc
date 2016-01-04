@@ -764,8 +764,8 @@ Note that this function can accept covars, but will never return them.
 This is because we never want to infer a quantified covar!
 -}
 
-quantifyTyVars :: TcTyCoVarSet   -- global tvs
-               -> Pair TcTyCoVarSet    -- dependent tvs       We only distinguish
+quantifyTyVars :: TcDTyCoVarSet   -- global tvs
+               -> Pair TcDTyCoVarSet   -- dependent tvs       We only distinguish
                                        -- nondependent tvs    between these for
                                        --                     -XNoPolyKinds
                -> TcM [TcTyVar]
@@ -775,19 +775,19 @@ quantifyTyVars :: TcTyCoVarSet   -- global tvs
 
 quantifyTyVars gbl_tvs (Pair dep_tkvs nondep_tkvs)
   = do { dep_tkvs    <- zonkTyCoVarsAndFV dep_tkvs
-       ; nondep_tkvs <- (`minusVarSet` dep_tkvs) <$>
+       ; nondep_tkvs <- (`minusDVarSet` dep_tkvs) <$>
                         zonkTyCoVarsAndFV nondep_tkvs
        ; gbl_tvs     <- zonkTyCoVarsAndFV gbl_tvs
 
-       ; let all_cvs    = filterVarSet isCoVar $
-                          dep_tkvs `unionVarSet` nondep_tkvs `minusVarSet` gbl_tvs
-             dep_kvs    = varSetElemsWellScoped $
-                          dep_tkvs `minusVarSet` gbl_tvs
-                                   `minusVarSet` (closeOverKinds all_cvs)
+       ; let all_cvs    = filterDVarSet isCoVar $
+                          dep_tkvs `unionDVarSet` nondep_tkvs `minusDVarSet` gbl_tvs
+             dep_kvs    = dVarSetElemsWellScoped $
+                          dep_tkvs `minusDVarSet` gbl_tvs
+                                   `minusDVarSet` (closeOverKindsDSet all_cvs)
                              -- remove any tvs that a covar depends on
 
-             nondep_tvs = varSetElemsWellScoped $
-                          nondep_tkvs `minusVarSet` gbl_tvs
+             nondep_tvs = dVarSetElemsWellScoped $
+                          nondep_tkvs `minusDVarSet` gbl_tvs
                            -- no worry about dependent cvs here, as these vars
                            -- are non-dependent
 
@@ -988,7 +988,7 @@ a \/\a in the final result but all the occurrences of a will be zonked to ()
 -- variables free in anything (term-level or type-level) in scope. We thus
 -- don't have to worry about clashes with things that are not in scope, because
 -- if they are reachable, then they'll be returned here.
-tcGetGlobalTyCoVars :: TcM TcTyVarSet
+tcGetGlobalTyCoVars :: TcM TcDTyVarSet
 tcGetGlobalTyCoVars
   = do { (TcLclEnv {tcl_tyvars = gtv_var}) <- getLclEnv
        ; gbl_tvs  <- readMutVar gtv_var
@@ -996,7 +996,7 @@ tcGetGlobalTyCoVars
        ; writeMutVar gtv_var gbl_tvs'
        ; return gbl_tvs' }
 
-zonkTcTypeAndFV :: TcType -> TcM TyCoVarSet
+zonkTcTypeAndFV :: TcType -> TcM DTyCoVarSet
 -- Zonk a type and take its free variables
 -- With kind polymorphism it can be essential to zonk *first*
 -- so that we find the right set of free variables.  Eg
@@ -1006,7 +1006,7 @@ zonkTcTypeAndFV :: TcType -> TcM TyCoVarSet
 -- NB: This might be called from within the knot, so don't use
 -- smart constructors. See Note [Zonking within the knot] in TcHsType
 zonkTcTypeAndFV ty
-  = tyCoVarsOfType <$> mapType (zonkTcTypeMapper { tcm_smart = False }) () ty
+  = tyCoVarsOfTypeDSet <$> mapType (zonkTcTypeMapper { tcm_smart = False }) () ty
 
 zonkTyCoVar :: TyCoVar -> TcM TcType
 -- Works on TyVars and TcTyVars
@@ -1019,8 +1019,9 @@ zonkTyCoVar tv | isTcTyVar tv = zonkTcTyVar tv
    -- TcHsType.tcTyClTyVars, but it seems
    -- painful to make them into TcTyVars there
 
-zonkTyCoVarsAndFV :: TyCoVarSet -> TcM TyCoVarSet
-zonkTyCoVarsAndFV tycovars = tyCoVarsOfTypes <$> mapM zonkTyCoVar (varSetElems tycovars)
+zonkTyCoVarsAndFV :: DTyCoVarSet -> TcM DTyCoVarSet
+zonkTyCoVarsAndFV tycovars =
+  tyCoVarsOfTypesDSet <$> mapM zonkTyCoVar (dVarSetElems tycovars)
 
 zonkTcTyVars :: [TcTyVar] -> TcM [TcType]
 zonkTcTyVars tyvars = mapM zonkTcTyVar tyvars
