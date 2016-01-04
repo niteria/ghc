@@ -82,7 +82,7 @@ initTc :: HscEnv
 
 initTc hsc_env hsc_src keep_rn_syntax mod loc do_this
  = do { errs_var     <- newIORef (emptyBag, emptyBag) ;
-        tvs_var      <- newIORef emptyVarSet ;
+        tvs_var      <- newIORef emptyDVarSet ;
         keep_var     <- newIORef emptyNameSet ;
         used_gre_var <- newIORef [] ;
         th_var       <- newIORef False ;

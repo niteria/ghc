@@ -26,6 +26,7 @@ import Type
 import TyCoRep
 import Var
 import UniqFM
+import UniqDFM
 import Unique( Unique )
 import FastString(FastString)
 
@@ -136,6 +137,14 @@ instance TrieMap UniqFM where
   alterTM k f m = alterUFM f m k
   foldTM k m z = foldUFM k z m
   mapTM f m = mapUFM f m
+
+instance TrieMap UniqDFM where
+  type Key UniqDFM = Unique
+  emptyTM = emptyUDFM
+  lookupTM k m = lookupUDFM m k
+  alterTM k f m = alterUDFM f m k
+  foldTM k m z = foldUDFM k z m
+  mapTM f m = mapUDFM f m
 
 {-
 ************************************************************************
@@ -988,11 +997,11 @@ xtBndr env v f = xtG (D env (varType v)) f
 
 --------- Variable occurrence -------------
 data VarMap a = VM { vm_bvar   :: BoundVarMap a  -- Bound variable
-                   , vm_fvar   :: VarEnv a }      -- Free variable
+                   , vm_fvar   :: DVarEnv a }    -- Free variable
 
 instance TrieMap VarMap where
    type Key VarMap = Var
-   emptyTM  = VM { vm_bvar = IntMap.empty, vm_fvar = emptyVarEnv }
+   emptyTM  = VM { vm_bvar = IntMap.empty, vm_fvar = emptyDVarEnv }
    lookupTM = lkVar emptyCME
    alterTM  = xtVar emptyCME
    foldTM   = fdVar
@@ -1000,7 +1009,7 @@ instance TrieMap VarMap where
 
 mapVar :: (a->b) -> VarMap a -> VarMap b
 mapVar f (VM { vm_bvar = bv, vm_fvar = fv })
-  = VM { vm_bvar = mapTM f bv, vm_fvar = mapVarEnv f fv }
+  = VM { vm_bvar = mapTM f bv, vm_fvar = mapDVarEnv f fv }
 
 lkVar :: CmEnv -> Var -> VarMap a -> Maybe a
 lkVar env v
@@ -1016,8 +1025,8 @@ fdVar :: (a -> b -> b) -> VarMap a -> b -> b
 fdVar k m = foldTM k (vm_bvar m)
           . foldTM k (vm_fvar m)
 
-lkFreeVar :: Var -> VarEnv a -> Maybe a
-lkFreeVar var env = lookupVarEnv env var
+lkFreeVar :: Var -> DVarEnv a -> Maybe a
+lkFreeVar var env = lookupDVarEnv env var
 
-xtFreeVar :: Var -> XT a -> VarEnv a -> VarEnv a
-xtFreeVar v f m = alterVarEnv f m v
+xtFreeVar :: Var -> XT a -> DVarEnv a -> DVarEnv a
+xtFreeVar v f m = alterDVarEnv f m v

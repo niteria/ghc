@@ -1198,7 +1198,7 @@ tcFamTyPats fam_shape@(name,_,_) mb_clsinfo pats kind_checker thing_inside
             -- them into skolems, so that we don't subsequently
             -- replace a meta kind var with (Any *)
             -- Very like kindGeneralize
-       ; qtkvs <- quantifyTyVars emptyVarSet $
+       ; qtkvs <- quantifyTyVars emptyDVarSet $
                                  splitDepVarsOfTypes typats
 
        ; MASSERT( isEmptyVarSet $ coVarsOfTypes typats )
@@ -1418,7 +1418,7 @@ tcConDecl _new_or_data rep_tycon tmpl_tvs res_tmpl
     do { traceTc "tcConDecl 1" (ppr names)
        ; (ctxt, stricts, field_lbls, arg_tys, res_ty,hs_details)
            <- tcGadtSigType (ppr names) (unLoc $ head names) ty
-       ; tkvs <- quantifyTyVars emptyVarSet
+       ; tkvs <- quantifyTyVars emptyDVarSet
                                 (splitDepVarsOfTypes (res_ty:ctxt++arg_tys))
 
              -- Zonk to Types
