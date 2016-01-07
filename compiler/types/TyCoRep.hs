@@ -1792,6 +1792,9 @@ substTelescope = go_subst emptyTCvSubst
 substTyWith :: [TyVar] -> [Type] -> Type -> Type
 substTyWith tvs tys = ASSERT( length tvs == length tys )
                       substTyUnchecked (zipOpenTCvSubst tvs tys)
+-- XXX: look here
+-- substTyWith tvs tys ty = ASSERT( length tvs == length tys )
+--                       substTy (extendTCvInScopeList (zipOpenTCvSubst tvs tys) (tyCoVarsOfTypeList ty)) ty
 
 -- | Coercion substitution making use of an 'TCvSubst' that
 -- is assumed to be open, see 'zipOpenTCvSubst'
