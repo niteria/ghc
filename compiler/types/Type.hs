@@ -294,7 +294,7 @@ coreView :: Type -> Maybe Type
 -- By being non-recursive and inlined, this case analysis gets efficiently
 -- joined onto the case analysis that the caller is already doing
 coreView (TyConApp tc tys) | Just (tenv, rhs, tys') <- expandSynTyCon_maybe tc tys
-              = Just (mkAppTys (substTyUnchecked (mkTopTCvSubst tenv) rhs) tys')
+  = Just (mkAppTys (substTyAddInScope (mkOpenTCvSubstPrs tenv) rhs) tys')
                -- Its important to use mkAppTys, rather than (foldl AppTy),
                -- because the function part might well return a
                -- partially-applied type constructor; indeed, usually will!

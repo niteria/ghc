@@ -286,7 +286,7 @@ improveClsFD clas_tvs fd
                         -- executed.  What we're doing instead is recording the partial
                         -- work of the ls1/ls2 unification leaving a smaller unification problem
                   where
-                    rtys1' = map (substTy subst) rtys1
+                    rtys1' = map (substTyAddInScope subst) rtys1
 
                     fdeqs = zipAndComputeFDEqs (\_ _ -> False) rtys1' rtys2
                         -- Don't discard anything!

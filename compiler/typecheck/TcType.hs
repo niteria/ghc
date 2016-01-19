@@ -143,7 +143,7 @@ module TcType (
   -- Type substitutions
   TCvSubst(..),         -- Representation visible to a few friends
   TvSubstEnv, emptyTCvSubst,
-  mkOpenTCvSubst, zipOpenTCvSubst, zipTopTCvSubst,
+  mkOpenTCvSubst, mkOpenTCvSubstPrs, zipOpenTCvSubst, zipTopTCvSubst,
   mkTopTCvSubst, notElemTCvSubst, unionTCvSubst,
   getTvSubstEnv, setTvSubstEnv, getTCvInScope, extendTCvInScope,
   Type.lookupTyVar, Type.extendTCvSubst, Type.substTyVarBndr,

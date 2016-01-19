@@ -83,7 +83,7 @@ module TyCoRep (
         extendTCvSubstBinder,
         unionTCvSubst, zipTyEnv, zipCoEnv, mkTyCoInScopeSet,
         mkOpenTCvSubst, zipOpenTCvSubst, zipOpenTCvSubstCoVars,
-        zipOpenTCvSubstBinders,
+        zipOpenTCvSubstBinders, mkOpenTCvSubstPrs,
         mkTopTCvSubst, zipTopTCvSubst,
 
         substTelescope,
@@ -1578,6 +1578,11 @@ extendSubstEnvs (tenv, cenv) v ty
   | otherwise
   = pprPanic "extendSubstEnvs" (ppr v <+> text "|->" <+> ppr ty)
 
+partitionIntoSubstEnvs :: [(TyCoVar, Type)] -> (TvSubstEnv, CvSubstEnv)
+partitionIntoSubstEnvs prs
+  = foldl extend (emptyTvSubstEnv, emptyCvSubstEnv) prs
+  where extend envs (v, ty) = extendSubstEnvs envs v ty
+
 extendTCvSubst :: TCvSubst -> Var -> Type -> TCvSubst
 extendTCvSubst (TCvSubst in_scope tenv cenv) tv ty
   = TCvSubst in_scope tenv' cenv'
@@ -1656,10 +1661,16 @@ zipOpenTCvSubstBinders bndrs tys
 
 -- | Called when doing top-level substitutions. Here we expect that the
 -- free vars of the range of the substitution will be empty.
-mkTopTCvSubst :: [(TyCoVar, Type)] -> TCvSubst
-mkTopTCvSubst prs = TCvSubst emptyInScopeSet tenv cenv
-  where (tenv, cenv) = foldl extend (emptyTvSubstEnv, emptyCvSubstEnv) prs
-        extend envs (v, ty) = extendSubstEnvs envs v ty
+mkTopTCvSubst :: (?callStack :: CallStack) => [(TyCoVar, Type)] -> TCvSubst
+mkTopTCvSubst prs =
+    ASSERT2 ( fvsRangeOfSubstEmpty, text "prs" <+> ppr prs )
+    TCvSubst emptyInScopeSet tenv cenv
+  where (tenv, cenv) = partitionIntoSubstEnvs prs
+        fvsRangeOfSubstEmpty = isEmptyVarSet $ tyCoVarsOfTypes $ map snd prs
+
+mkOpenTCvSubstPrs :: [(TyCoVar, Type)] -> TCvSubst
+mkOpenTCvSubstPrs prs = mkOpenTCvSubst tenv cenv
+  where (tenv, cenv) = partitionIntoSubstEnvs prs
 
 -- | Makes a subst with an empty in-scope-set. No CoVars, please!
 zipTopTCvSubst :: [TyVar] -> [Type] -> TCvSubst
@@ -1797,7 +1808,7 @@ substTyWithBinders bndrs tys = ASSERT( length bndrs == length tys )
 -- to the in-scope set. This is useful for the case when the free variables
 -- aren't already in the in-scope set or easily available.
 -- See also Note [Generating the in-scope set for a substitution].
-substTyAddInScope :: TCvSubst -> Type -> Type
+substTyAddInScope :: (?callStack :: CallStack) => TCvSubst -> Type -> Type
 substTyAddInScope subst ty =
   substTy (extendTCvInScopeSet subst $ tyCoVarsOfType ty) ty
 
