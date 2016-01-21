@@ -1383,7 +1383,7 @@ tcConDecl new_or_data rep_tycon tmpl_tvs res_tmpl
                  }
 
              -- Kind generalisation
-       ; tkvs <- quantifyTyVars (mkVarSet tmpl_tvs)
+       ; tkvs <- quantifyTyVars (mkDVarSet tmpl_tvs)
                                 (splitDepVarsOfTypes (ctxt++arg_tys))
 
              -- Zonk to Types
