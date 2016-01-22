@@ -785,7 +785,9 @@ lintTyApp :: OutType -> OutType -> LintM OutType
 lintTyApp fun_ty arg_ty
   | Just (tv,body_ty) <- splitForAllTy_maybe fun_ty
   = do  { lintTyKind tv arg_ty
-        ; return (substTyWith [tv] [arg_ty] body_ty) }
+        ; in_scope <- getInScope
+        -- ; pprSTrace (ppr (tv, arg_ty, body_ty, in_scope)) $ return ()
+        ; return (substTyWithInScope [tv] [arg_ty] in_scope body_ty) }
 
   | otherwise
   = failWithL (mkTyAppMsg fun_ty arg_ty)
@@ -1132,25 +1134,27 @@ lint_app :: SDoc -> LintedKind -> [(LintedType,LintedKind)] -> LintM Kind
 -- If you edit this function, you may need to update the GHC formalism
 -- See Note [GHC Formalism]
 lint_app doc kfn kas
-    = foldlM go_app kfn kas
+    = snd <$> foldlM (uncurry go_app) (emptyTCvSubst, kfn) kas
   where
     fail_msg = vcat [ hang (text "Kind application error in") 2 doc
                     , nest 2 (text "Function kind =" <+> ppr kfn)
                     , nest 2 (text "Arg kinds =" <+> ppr kas) ]
 
-    go_app kfn ka
+    go_app subst kfn ka
       | Just kfn' <- coreView kfn
-      = go_app kfn' ka
+      = go_app subst kfn' ka
 
-    go_app (ForAllTy (Anon kfa) kfb) (_,ka)
+    go_app subst (ForAllTy (Anon kfa) kfb) (_,ka)
       = do { unless (ka `eqType` kfa) (addErrL fail_msg)
-           ; return kfb }
+           ; return (subst, kfb) }
 
-    go_app (ForAllTy (Named kv _vis) kfn) (ta,ka)
+    go_app subst (ForAllTy (Named kv _vis) kfn) (ta,ka)
       = do { unless (ka `eqType` tyVarKind kv) (addErrL fail_msg)
-           ; return (substTyWith [kv] [ta] kfn) }
+           ; let subst' = extendTCvSubstAndInScope subst kv ta
+           -- ; pprSTrace (ppr (in_scope)) $ return ()
+           ; return (zapTCvSubst subst', substTy subst' kfn) }
 
-    go_app _ _ = failWithL fail_msg
+    go_app _ _ _ = failWithL fail_msg
 
 {- *********************************************************************
 *                                                                      *
@@ -1684,6 +1688,9 @@ updateTCvSubst subst' m
 
 getTCvSubst :: LintM TCvSubst
 getTCvSubst = LintM (\ env errs -> (Just (le_subst env), errs))
+
+getInScope :: LintM InScopeSet
+getInScope = LintM (\ env errs -> (Just (getTCvInScope $ le_subst env), errs))
 
 applySubstTy :: InType -> LintM OutType
 applySubstTy ty = do { subst <- getTCvSubst; return (substTy subst ty) }

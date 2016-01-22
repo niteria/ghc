@@ -5,6 +5,7 @@
 
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE ImplicitParams #-}
 
 -- | Main functions for manipulating types and type-related things
 module Type (
@@ -222,6 +223,7 @@ import Maybes           ( orElse )
 import Data.Maybe       ( isJust, mapMaybe )
 import Control.Monad    ( guard )
 import Control.Arrow    ( first, second )
+import GHC.Stack (CallStack)
 
 -- $type_classification
 -- #type_classification#
@@ -793,16 +795,28 @@ funResultTy :: Type -> Type
 funResultTy ty = piResultTy ty (pprPanic "funResultTy" (ppr ty))
 
 -- | Essentially 'funResultTy' on kinds handling pi-types too
-piResultTy :: Type -> Type -> Type
-piResultTy ty arg | Just ty' <- coreView ty = piResultTy ty' arg
-piResultTy (ForAllTy (Anon _) res)     _   = res
-piResultTy (ForAllTy (Named tv _) res) arg = substTyWith [tv] [arg] res
-piResultTy ty arg                          = pprPanic "piResultTy"
-                                                 (ppr ty $$ ppr arg)
+piResultTy :: (?callStack :: CallStack) => Type -> Type -> Type
+piResultTy ty arg = fst $ pi_result_ty (emptyTCvSubst `extendTCvInScopeSet` tyCoVarsOfType ty) ty arg
+-- piResultTy ty arg | pprSTrace (ppr (ty, arg)) False = undefined
+-- piResultTy ty arg | Just ty' <- coreView ty = pprSTrace (ppr (ty, ty', arg)) $ piResultTy ty' arg
+-- piResultTy (ForAllTy (Anon _) res)     _   = pprSTrace (ppr res) $ res
+-- piResultTy (ForAllTy (Named tv _) res) arg = pprSTrace (ppr (tv, arg, res)) $ substTyWith [tv] [arg] res
+-- piResultTy ty arg                          = pprPanic "piResultTy"
+                                                 -- (ppr ty $$ ppr arg)
+
+pi_result_ty :: (?callStack :: CallStack) => TCvSubst -> Type -> Type -> (Type, TCvSubst)
+-- pi_result_ty subst ty arg | pprSTrace (ppr (ty, arg, subst)) False = undefined
+pi_result_ty subst ty arg
+  | Just ty' <- coreView ty = pi_result_ty subst ty' arg
+pi_result_ty subst (ForAllTy (Anon _) res) _ = (res, subst)
+pi_result_ty subst (ForAllTy (Named tv _) res) arg
+  = (substTy subst' res, zapTCvSubst subst')
+  where subst' = extendTCvSubstAndInScope subst tv arg
+pi_result_ty _subst ty arg = pprPanic "pi_result_ty" (ppr ty $$ ppr arg)
 
 -- | Fold 'piResultTy' over many types
-piResultTys :: Type -> [Type] -> Type
-piResultTys = foldl piResultTy
+piResultTys :: (?callStack :: CallStack) => Type -> [Type] -> Type
+piResultTys ty = fst . foldl (uncurry $ flip pi_result_ty) (ty, emptyTCvSubst `extendTCvInScopeSet` tyCoVarsOfType ty)
 
 funArgTy :: Type -> Type
 -- ^ Extract the function argument type and panic if that is not possible

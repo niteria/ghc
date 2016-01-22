@@ -1,12 +1,14 @@
+{-# LANGUAGE ImplicitParams #-}
 module Type where
 import TyCon
 import {-# SOURCE #-} TyCoRep( Type, Kind )
+import GHC.Stack (CallStack)
 
 isPredTy :: Type -> Bool
 isCoercionTy :: Type -> Bool
 
 mkAppTy :: Type -> Type -> Type
-piResultTy :: Type -> Type -> Type
+piResultTy :: (?callStack :: CallStack) => Type -> Type -> Type
 
 typeKind :: Type -> Kind
 eqType :: Type -> Type -> Bool

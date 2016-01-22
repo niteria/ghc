@@ -20,6 +20,7 @@ Note [The Type-related module hierarchy]
 {-# LANGUAGE CPP, DeriveDataTypeable, DeriveFunctor, DeriveFoldable,
              DeriveTraversable, MultiWayIf #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# OPTIONS -w #-}
 
 module TyCoRep (
         TyThing(..),
@@ -90,7 +91,7 @@ module TyCoRep (
         substTyWith, substTyWithCoVars, substTysWith, substTysWithCoVars,
         substCoWith,
         substTy, substTyAddInScope, substTyUnchecked,
-        substTyWithBinders,
+        substTyWithBinders, substTyWithInScope,
         substTys, substTheta,
         lookupTyVar, substTyVarBndr,
         substCo, substCos, substCoVar, substCoVars, lookupCoVar,
@@ -1592,6 +1593,10 @@ extendTCvInScopeSet :: TCvSubst -> VarSet -> TCvSubst
 extendTCvInScopeSet (TCvSubst in_scope tenv cenv) vars
   = TCvSubst (extendInScopeSetSet in_scope vars) tenv cenv
 
+extendTCvInScopeInScope :: TCvSubst -> InScopeSet -> TCvSubst
+extendTCvInScopeInScope (TCvSubst in_scope tenv cenv) in_scope2
+  = TCvSubst (in_scope `unionInScope` in_scope2) tenv cenv
+
 extendSubstEnvs :: (TvSubstEnv, CvSubstEnv) -> Var -> Type
                 -> (TvSubstEnv, CvSubstEnv)
 extendSubstEnvs (tenv, cenv) v ty
@@ -1789,9 +1794,14 @@ substTelescope = go_subst emptyTCvSubst
 
 -- | Type substitution making use of an 'TCvSubst' that
 -- is assumed to be open, see 'zipOpenTCvSubst'
-substTyWith :: [TyVar] -> [Type] -> Type -> Type
+substTyWith :: (?callStack :: CallStack) => [TyVar] -> [Type] -> Type -> Type
 substTyWith tvs tys = ASSERT( length tvs == length tys )
-                      substTyUnchecked (zipOpenTCvSubst tvs tys)
+                      substTy {- Unchecked -} (zipOpenTCvSubst tvs tys)
+
+substTyWithInScope :: (?callStack :: CallStack) => [TyVar] -> [Type] -> InScopeSet -> Type -> Type
+substTyWithInScope tvs tys in_scope =
+  ASSERT( length tvs == length tys )
+  substTy (zipOpenTCvSubst tvs tys `extendTCvInScopeInScope` in_scope)
 -- XXX: look here
 -- substTyWith tvs tys ty = ASSERT( length tvs == length tys )
 --                       substTy (extendTCvInScopeList (zipOpenTCvSubst tvs tys) (tyCoVarsOfTypeList ty)) ty
@@ -1820,7 +1830,7 @@ substTysWithCoVars cvs cos = ASSERT( length cvs == length cos )
 
 -- | Type substitution using 'Binder's. Anonymous binders
 -- simply ignore their matching type.
-substTyWithBinders :: [TyBinder] -> [Type] -> Type -> Type
+substTyWithBinders :: (?callStack :: CallStack) => [TyBinder] -> [Type] -> Type -> Type
 substTyWithBinders bndrs tys = ASSERT( length bndrs == length tys )
                                substTyUnchecked (zipOpenTCvSubstBinders bndrs tys)
 
@@ -1872,10 +1882,11 @@ substTy subst@(TCvSubst in_scope tenv cenv) ty
 -- Note [Generating the in-scope set for a substitution].
 -- The goal of #11371 is to migrate all the calls of substTyUnchecked to
 -- substTy and remove this function. Please don't use in new code.
-substTyUnchecked :: TCvSubst -> Type  -> Type
-substTyUnchecked subst ty
-                 | isEmptyTCvSubst subst = ty
-                 | otherwise             = subst_ty subst ty
+substTyUnchecked :: (?callStack :: CallStack) => TCvSubst -> Type  -> Type
+substTyUnchecked = substTy
+-- substTyUnchecked subst ty
+--                  | isEmptyTCvSubst subst = ty
+--                  | otherwise             = subst_ty subst ty
 
 -- | Substitute within several 'Type's
 substTys :: TCvSubst -> [Type] -> [Type]
