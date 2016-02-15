@@ -49,6 +49,7 @@ import qualified GHC.LanguageExtensions as LangExt
 import Control.Monad ( when, unless )
 import Data.List     ( partition )
 import Data.Foldable    ( fold )
+import UniqDFM (udfmToUfm)
 
 {-
 *********************************************************************************
@@ -611,8 +612,8 @@ simplifyInfer rhs_tclvl apply_mr sigs name_taus wanteds
          -- so we must promote it!  The inferred type is just
          --   f :: beta -> beta
        ; outer_tclvl    <- TcM.getTcLevel
-       ; zonked_tau_tvs <- fold <$>
-                           traverse TcM.zonkTyCoVarsAndFV zonked_tau_tkvs
+       ; zonked_tau_tvs <- fold <$> traverse (TcM.zonkTyCoVarsAndFV . udfmToUfm)
+                             zonked_tau_tkvs
               -- decideQuantification turned some meta tyvars into
               -- quantified skolems, so we have to zonk again
 
@@ -719,6 +720,12 @@ If the monomorphism restriction does not apply, then we quantify as follows:
 If the MR does apply, mono_tvs includes all the constrained tyvars --
 including all covars -- and the quantified constraints are empty/insoluble.
 
+Note [decideQuantification determinism]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The 'zonked_pair' argument to decideQuantification is a pair of deterministic
+sets of TyCoVars. This is important because the list of TcTyVars it
+returns will get quantified over and can end up in the inferred type signatures.
+See also Note [quantifyTyVars determinism] in TcMType.
 -}
 
 decideQuantification
@@ -726,10 +733,11 @@ decideQuantification
   -> [TcIdSigInfo]
   -> [(Name, TcTauType)]   -- variables to be generalised (for errors only)
   -> [PredType]            -- candidate theta
-  -> Pair TcTyCoVarSet     -- dependent (kind) variables & type variables
+  -> Pair TcDTyCoVarSet    -- dependent (kind) variables & type variables
   -> TcM ( [TcTyVar]       -- Quantify over these (skolems)
          , [PredType] )    -- and this context (fully zonked)
 -- See Note [Deciding quantification]
+-- See Note [decideQuantification determinism]
 decideQuantification apply_mr sigs name_taus constraints
                      zonked_pair@(Pair zonked_tau_kvs zonked_tau_tvs)
   | apply_mr     -- Apply the Monomorphism restriction
@@ -757,7 +765,7 @@ decideQuantification apply_mr sigs name_taus constraints
   | otherwise
   = do { gbl_tvs <- tcGetGlobalTyCoVars
        ; let mono_tvs     = growThetaTyVars equality_constraints gbl_tvs
-             tau_tvs_plus = growThetaTyVars constraints zonked_tau_tvs
+             tau_tvs_plus = growThetaTyVarsDSet constraints zonked_tau_tvs
        ; qtvs <- quantify_tvs sigs mono_tvs (Pair zonked_tau_kvs tau_tvs_plus)
           -- We don't grow the kvs, as there's no real need to. Recall
           -- that quantifyTyVars uses the separation between kvs and tvs
@@ -782,21 +790,23 @@ decideQuantification apply_mr sigs name_taus constraints
                  , text "min_theta:"    <+> ppr min_theta ])
        ; return (qtvs, min_theta) }
   where
-    zonked_tkvs = zonked_tau_kvs `unionVarSet` zonked_tau_tvs
+    zonked_tkvs = udfmToUfm zonked_tau_kvs
+                  `unionVarSet` udfmToUfm zonked_tau_tvs
     bndrs    = map fst name_taus
     pp_bndrs = pprWithCommas (quotes . ppr) bndrs
     equality_constraints = filter isEqPred constraints
 
 quantify_tvs :: [TcIdSigInfo]
              -> TcTyVarSet   -- the monomorphic tvs
-             -> Pair TcTyVarSet   -- kvs, tvs to quantify
+             -> Pair TcDTyVarSet   -- kvs, tvs to quantify
              -> TcM [TcTyVar]
 -- See Note [Which type variables to quantify]
+-- See Note [quantifyTyVars determinism] in TcMType
 quantify_tvs sigs mono_tvs (Pair tau_kvs tau_tvs)
   = quantifyTyVars (mono_tvs `delVarSetList` sig_qtvs)
                    (Pair tau_kvs
-                         (tau_tvs `extendVarSetList` sig_qtvs
-                                  `extendVarSetList` sig_wcs))
+                         (tau_tvs `extendDVarSetList` sig_qtvs
+                                  `extendDVarSetList` sig_wcs))
                    -- NB: quantifyTyVars zonks its arguments
   where
     sig_qtvs = [ skol | sig <- sigs, (_, skol) <- sig_skols sig ]
@@ -825,6 +835,32 @@ growThetaTyVars theta tvs
        | otherwise                          = tvs
        where
          pred_tvs = tyCoVarsOfType pred
+
+------------------
+growThetaTyVarsDSet :: ThetaType -> DTyCoVarSet -> DTyVarSet
+-- See Note [Growing the tau-tvs using constraints]
+-- NB: only returns tyvars, never covars
+-- It takes a deterministic set of TyCoVars and returns a deterministic set
+-- of TyVars. This is needed to preserve determinism in decideQuantification.
+-- See Note [decideQuantification determinism]
+-- The implementation mirrors growThetaTyVars
+growThetaTyVarsDSet theta tvs
+  | null theta = tvs_only
+  | otherwise  = filterDVarSet isTyVar $
+                 transCloDVarSet mk_next seed_tvs
+  where
+    tvs_only = filterDVarSet isTyVar tvs
+    seed_tvs = tvs `unionDVarSet` tyCoVarsOfTypesDSet ips
+    (ips, non_ips) = partition isIPPred theta
+                         -- See Note [Inheriting implicit parameters] in TcType
+
+    mk_next :: DVarSet -> DVarSet -- Maps current set to newly-grown ones
+    mk_next so_far = foldr (grow_one so_far) emptyDVarSet non_ips
+    grow_one so_far pred tvs
+       | pred_tvs `intersectsDVarSet` so_far = tvs `unionDVarSet` pred_tvs
+       | otherwise                           = tvs
+       where
+         pred_tvs = tyCoVarsOfTypeDSet pred
 
 {- Note [Which type variables to quantify]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

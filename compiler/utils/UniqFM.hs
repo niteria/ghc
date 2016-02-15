@@ -30,7 +30,7 @@ of arguments of combining function.
 
 module UniqFM (
         -- * Unique-keyed mappings
-        UniqFM,       -- abstract type
+        UniqFM(UFM),  -- abstract type, UFM exported for UniqDFM only
 
         -- ** Manipulating those mappings
         emptyUFM,

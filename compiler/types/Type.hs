@@ -128,6 +128,7 @@ module Type (
 
         -- * Well-scoped lists of variables
         varSetElemsWellScoped, toposortTyVars, tyCoVarsOfTypeWellScoped,
+        dVarSetElemsWellScoped,
 
         -- * Type comparison
         eqType, eqTypeX, eqTypes, cmpType, cmpTypes, cmpTypeX, cmpTypesX, cmpTc,
@@ -1812,6 +1813,11 @@ toposortTyVars tvs = reverse $
 varSetElemsWellScoped :: VarSet -> [Var]
 varSetElemsWellScoped = toposortTyVars . varSetElems
 
+-- | Extract a well-scoped deterministically ordered list of variables from a
+-- deterministic set of variables.
+dVarSetElemsWellScoped :: DVarSet -> [Var]
+dVarSetElemsWellScoped = toposortTyVars . dVarSetElems
+
 -- | Get the free vars of a type in scoped order
 tyCoVarsOfTypeWellScoped :: Type -> [TyVar]
 tyCoVarsOfTypeWellScoped = toposortTyVars . tyCoVarsOfTypeList
@@ -2194,21 +2200,24 @@ synTyConResKind tycon = piResultTys (tyConKind tycon) (mkTyVarTys (tyConTyVars t
 -- and non-dependently. (This isn't the most precise analysis, because
 -- it's used in the typechecking knot. It might list some dependent
 -- variables as also non-dependent.)
-splitDepVarsOfType :: Type -> Pair TyCoVarSet
+-- The result is a pair of deterministic sets of TyCoVars, it is later passed to
+-- quantifyTyVars. See Note [quantifyTyVars determinism] in TcMType.
+splitDepVarsOfType :: Type -> Pair DTyCoVarSet
 splitDepVarsOfType = go
   where
-    go (TyVarTy tv)              = Pair (tyCoVarsOfType $ tyVarKind tv)
-                                        (unitVarSet tv)
+    go (TyVarTy tv)              = Pair (tyCoVarsOfTypeDSet $ tyVarKind tv)
+                                        (unitDVarSet tv)
     go (AppTy t1 t2)             = go t1 `mappend` go t2
     go (TyConApp _ tys)          = foldMap go tys
     go (ForAllTy (Anon arg) res) = go arg `mappend` go res
     go (ForAllTy (Named tv _) ty)
       = let Pair kvs tvs = go ty in
-        Pair (kvs `delVarSet` tv `unionVarSet` tyCoVarsOfType (tyVarKind tv))
-             (tvs `delVarSet` tv)
+        Pair (kvs `delDVarSet` tv
+                  `unionDVarSet` tyCoVarsOfTypeDSet (tyVarKind tv))
+             (tvs `delDVarSet` tv)
     go (LitTy {})                = mempty
-    go (CastTy ty co)            = go ty `mappend` Pair (tyCoVarsOfCo co)
-                                                        emptyVarSet
+    go (CastTy ty co)            = go ty `mappend` Pair (tyCoVarsOfCoDSet co)
+                                                        emptyDVarSet
     go (CoercionTy co)           = go_co co
 
     go_co co = let Pair ty1 ty2 = coercionKind co in
@@ -2216,7 +2225,9 @@ splitDepVarsOfType = go
                                         -- dimensions here. Be careful!
 
 -- | Like 'splitDepVarsOfType', but over a list of types
-splitDepVarsOfTypes :: [Type] -> Pair TyCoVarSet
+-- The result is a pair of deterministic sets of TyCoVars, it is later passed to
+-- quantifyTyVars. See Note [quantifyTyVars determinism] in TcMType.
+splitDepVarsOfTypes :: [Type] -> Pair DTyCoVarSet
 splitDepVarsOfTypes = foldMap splitDepVarsOfType
 
 -- | Retrieve the free variables in this type, splitting them based

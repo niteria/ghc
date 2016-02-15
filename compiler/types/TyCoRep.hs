@@ -1345,12 +1345,14 @@ closeOverKindsAcc tvs =
 closeOverKindsDSet :: DTyVarSet -> DTyVarSet
 closeOverKindsDSet = runFVDSet . closeOverKindsAcc . dVarSetElems
 
--- | Gets the free vars of a telescope, scoped over a given free var set.
-tyCoVarsOfTelescope :: [Var] -> TyCoVarSet -> TyCoVarSet
+-- | Gets the free vars of a telescope as a deterministic set,
+-- scoped over a given deterministic free var set.
+-- See Note [Deterministic UniqFM] in UniqDFM.
+tyCoVarsOfTelescope :: [Var] -> DTyCoVarSet -> DTyCoVarSet
 tyCoVarsOfTelescope [] fvs = fvs
 tyCoVarsOfTelescope (v:vs) fvs = tyCoVarsOfTelescope vs fvs
-                                 `delVarSet` v
-                                 `unionVarSet` tyCoVarsOfType (varType v)
+                                 `delDVarSet` v
+                                 `unionDVarSet` tyCoVarsOfTypeDSet (varType v)
 
 {-
 %************************************************************************

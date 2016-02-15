@@ -1,7 +1,7 @@
 TYPE SIGNATURES
-  unc :: forall t a b. (a -> b -> t) -> (a, b) -> t
+  unc :: forall a b t. (a -> b -> t) -> (a, b) -> t
 TYPE CONSTRUCTORS
 COERCION AXIOMS
 Dependent modules: []
 Dependent packages: [base-4.9.0.0, ghc-prim-0.5.0.0,
-                     integer-gmp-1.0.0.0]
+                     integer-gmp-1.0.0.1]

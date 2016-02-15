@@ -132,9 +132,9 @@ tcPatSynSig name sig_ty
 
        -- Kind generalisation; c.f. kindGeneralise
        ; let free_kvs = tyCoVarsOfTelescope (implicit_tvs ++ univ_tvs ++ ex_tvs) $
-                        tyCoVarsOfTypes (body_ty : req ++ prov ++ arg_tys)
+                        tyCoVarsOfTypesDSet (body_ty : req ++ prov ++ arg_tys)
 
-       ; kvs <- quantifyTyVars emptyVarSet (Pair free_kvs emptyVarSet)
+       ; kvs <- quantifyTyVars emptyVarSet (Pair free_kvs emptyDVarSet)
 
        -- Complain about:  pattern P :: () => forall x. x -> P x
        -- The renamer thought it was fine, but the existential 'x'

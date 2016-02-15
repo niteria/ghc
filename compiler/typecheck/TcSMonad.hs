@@ -93,6 +93,7 @@ module TcSMonad (
     TcLevel, isTouchableMetaTyVarTcS,
     isFilledMetaTyVar_maybe, isFilledMetaTyVar,
     zonkTyCoVarsAndFV, zonkTcType, zonkTcTypes, zonkTcTyVar, zonkCo,
+    zonkTyCoVarsAndFVDSet,
     zonkSimples, zonkWC,
 
     -- References
@@ -2760,6 +2761,9 @@ isFilledMetaTyVar tv = wrapTcS (TcM.isFilledMetaTyVar tv)
 
 zonkTyCoVarsAndFV :: TcTyCoVarSet -> TcS TcTyCoVarSet
 zonkTyCoVarsAndFV tvs = wrapTcS (TcM.zonkTyCoVarsAndFV tvs)
+
+zonkTyCoVarsAndFVDSet :: TcDTyCoVarSet -> TcS TcDTyCoVarSet
+zonkTyCoVarsAndFVDSet tvs = wrapTcS (TcM.zonkTyCoVarsAndFVDSet tvs)
 
 zonkCo :: Coercion -> TcS Coercion
 zonkCo = wrapTcS . TcM.zonkCo

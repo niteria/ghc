@@ -33,6 +33,7 @@ module VarSet (
         intersectDVarSet, intersectsDVarSet, disjointDVarSet,
         isEmptyDVarSet, delDVarSet, delDVarSetList,
         minusDVarSet, foldDVarSet, filterDVarSet,
+        dVarSetMinusVarSet,
         transCloDVarSet,
         sizeDVarSet, seqDVarSet,
         partitionDVarSet,
@@ -228,6 +229,9 @@ delDVarSet = delOneFromUniqDSet
 
 minusDVarSet :: DVarSet -> DVarSet -> DVarSet
 minusDVarSet = minusUniqDSet
+
+dVarSetMinusVarSet :: DVarSet -> VarSet -> DVarSet
+dVarSetMinusVarSet = uniqDSetMinusUniqSet
 
 foldDVarSet :: (Var -> a -> a) -> a -> DVarSet -> a
 foldDVarSet = foldUniqDSet
